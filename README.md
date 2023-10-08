@@ -1,7 +1,7 @@
 # BIO-to-RDMA
-如何从Linux内核中的BLOCK Layer中截取出当前IO操作的bio,并将bio中的信息解析转换成RDMA请求需要的参数。
+**如何从Linux内核中的BLOCK Layer中截取出当前IO操作的bio,并将bio中的信息解析转换成RDMA请求需要的参数。**
 
-How to extract the bio of the current I/O operation from the BLOCK Layer in the Linux kernel and parse the information in the bio into the parameters required for RDMA requests.
+**How to extract the bio of the current I/O operation from the BLOCK Layer in the Linux kernel and parse the information in the bio into the parameters required for RDMA requests.**
 
 ## BIO简介
 **文件系统层(File System Layer)** 和 **块层(Block Layer)** 之间传递的主要数据是块设备的I/O请求。这些I/O请求包含了对块设备的读取和写入操作。
@@ -88,6 +88,78 @@ Block 层连接着文件系统层和设备驱动层，从 submit_bio() 开始，
 
 ![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/e1c9bdb0-54a5-475c-ac2b-088fc9f52b36)
 
-###
+### BLOCK层主要负责：
+#### 管理IO请求
+
+IO 请求暂存、合并，以及决定以何种顺序处理IO请求。这里面涉及到 single-queue、multi-queue 框架以及具体的 IO 调度器。
+
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/ef3c311f-5b97-459d-8c14-aeb0c59fe3ee)
+
+#### bio与request的关系
+
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/8b3dea74-2a8a-4303-8a5a-43a6c3d42f50)
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/a64b667a-ba22-4208-9279-a693e314933e)
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/9017e88f-d324-47af-b84b-30630b413519)
+
+### request执行流程
+
+#### 开始执行
+调用blk_mq_start_request()函数执行request,若要截取完整的为执行的request及bio则需要在此处截取。
+
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/86ac06d0-cf2d-4090-a7b5-6a118a578d80)
+
+
+```cpp
+void blk_mq_start_request(struct request *rq)
+{
+getRequest(rq)
+
+    struct request_queue *q = rq->q; // 获取请求所属的请求队列
+
+    trace_block_rq_issue(rq); // 发出跟踪记录，表示请求已经发出
+
+    if (test_bit(QUEUE_FLAG_STATS, &q->queue_flags))
+{
+    rq->io_start_time_ns = ktime_get_ns();  // 获取当前时间并保存为请求的开始时间
+        rq->stats_sectors = blk_rq_sectors(rq); // 获取请求的扇区数并保存到统计数据中
+        rq->rq_flags |= RQF_STATS;              // 设置请求标志，表示请求具有统计数据
+        rq_qos_issue(q, rq);                    // 执行请求质量控制相关的操作
+    }
+
+    WARN_ON_ONCE(blk_mq_rq_state(rq) != MQ_RQ_IDLE); // 检查请求的状态是否为空闲状态，如果不是则发出警告
+
+    blk_add_timer(rq);                      // 向请求队列添加计时器，以便在超时时处理请求
+    WRITE_ONCE(rq->state, MQ_RQ_IN_FLIGHT); // 设置请求状态为飞行状态，表示请求已经开始执行
+
+#ifdef CONFIG_BLK_DEV_INTEGRITY
+    if (blk_integrity_rq(rq) && req_op(rq) == REQ_OP_WRITE)
+        q->integrity.profile->prepare_fn(rq); // 如果请求需要进行数据完整性检查，并且操作为写操作，则执行相应的数据准备操作
+#endif
+}
+```
+
+#### IO完成后设备驱动向块层传递完成情况：
+
+1. blk_mq_complete_request(struct request *rq)函数：
+   - 功能：用于标记请求的完成状态，并进行相关的处理。
+   - 调用时机：通常在设备驱动程序中，当设备完成请求处理后，通过调用blk_mq_complete_request()函数来标记请求的完成状态。
+   - 参数：struct request *rq，表示完成的请求对象。
+   - 处理逻辑：该函数将请求的状态设置为完成状态，并执行后续的处理，如调用完成回调函数、更新统计信息等。它不负责将请求从设备队列中移除。
+
+2. blk_mq_end_request(struct request *rq, blk_status_t error)函数：
+   - 功能：用于通知块层请求的完成情况，并将请求从设备队列中移除。
+   - 调用时机：在设备驱动程序中，当设备完成请求处理后，通过调用blk_mq_end_request()函数来通知块层请求的完成情况。
+   - 参数：struct request *rq，表示完成的请求对象；blk_status_t error，表示请求的完成状态。
+   - 处理逻辑：该函数根据`error`参数更新请求的状态，并将请求从设备队列中移除。它还可能执行后续的处理，如调用完成回调函数、更新统计信息等。
+
+总结起来，`blk_mq_complete_request()`函数用于标记请求的完成状态，并进行相关的处理，而`blk_mq_end_request()`函数则用于通知块层请求的完成情况，并将请求从设备队列中移除。
+
+#### 抓取开始执行和完成执行的request进行对比
+
+![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/741412a7-d9ce-4824-954e-29267cc373e8)
+
+
+
+
 
 
