@@ -1,6 +1,8 @@
 # BIO-to-RDMA
 如何从Linux内核中的BLOCK Layer中截取出当前IO操作的bio,并将bio中的信息解析转换成RDMA请求需要的参数。
 
+How to extract the bio of the current I/O operation from the BLOCK Layer in the Linux kernel and parse the information in the bio into the parameters required for RDMA requests.
+
 ## BIO简介
 **文件系统层(File System Layer)** 和 **块层(Block Layer)** 之间传递的主要数据是块设备的I/O请求。这些I/O请求包含了对块设备的读取和写入操作。
 ![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/6c166fca-3c50-4fd8-812b-a3f93702cffb)
