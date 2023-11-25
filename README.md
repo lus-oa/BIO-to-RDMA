@@ -101,6 +101,8 @@ IO 请求暂存、合并，以及决定以何种顺序处理IO请求。这里面
 ![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/a64b667a-ba22-4208-9279-a693e314933e)
 ![image](https://github.com/fusemen/BIO-to-RDMA/assets/122666739/9017e88f-d324-47af-b84b-30630b413519)
 
+![image](https://github.com/lus-oa/BIO-to-RDMA/assets/122666739/97b25c93-1868-4f37-84ef-39cc1beeb010)
+
 ### request执行流程
 
 #### 开始执行
